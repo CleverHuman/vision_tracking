@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(tail:*)",
+      "Bash(cd api_server && npx prisma generate 2>&1)",
+      "Bash(head:*)",
+      "Bash(cd E:/Work/vision_tracking/backend/api_server && npx tsc --noEmit 2>&1)"
+    ]
+  }
+}

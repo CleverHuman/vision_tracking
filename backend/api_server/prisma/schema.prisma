@@ -1,0 +1,405 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ──────────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  COACH
+  ANALYST
+  ATHLETE
+  SCOUT
+  MANAGER
+}
+
+enum OrgPlan {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
+enum VideoStatus {
+  PENDING
+  UPLOADING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum VideoCategory {
+  MATCH
+  TRAINING
+  DRILL
+  OPPONENT
+  HIGHLIGHT
+}
+
+enum MatchResult {
+  WIN
+  LOSS
+  DRAW
+}
+
+enum AnalysisStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+}
+
+enum AnalysisType {
+  FULL_MATCH
+  PLAYER_TRACKING
+  TACTICAL
+  SET_PIECE
+  SCOUTING
+  PERFORMANCE
+}
+
+enum JobStatus {
+  QUEUED
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum EventType {
+  GOAL
+  SHOT
+  PASS
+  TACKLE
+  FOUL
+  SAVE
+  SUBSTITUTION
+  CARD
+}
+
+enum AnnotationType {
+  DRAWING
+  TEXT
+  ARROW
+  ZONE
+}
+
+// ─── Models ─────────────────────────────────────────────────────────────────────
+
+model Organization {
+  id        String   @id @default(uuid())
+  name      String
+  logoUrl   String?
+  plan      OrgPlan  @default(FREE)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  teams Team[]
+
+  @@map("organizations")
+}
+
+model Team {
+  id             String   @id @default(uuid())
+  name           String
+  sport          String
+  logoUrl        String?
+  primaryColor   String?
+  secondaryColor String?
+  organizationId String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  players      Player[]
+  users        User[]
+  videos       Video[]
+  matches      Match[]
+  reports      Report[]
+
+  @@index([organizationId])
+  @@map("teams")
+}
+
+model User {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  username     String    @unique
+  passwordHash String
+  fullName     String
+  role         UserRole  @default(ANALYST)
+  sport        String?
+  avatarUrl    String?
+  teamId       String?
+  refreshToken String?
+  deletedAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  team          Team?          @relation(fields: [teamId], references: [id])
+  uploadedVideos Video[]       @relation("UploadedVideos")
+  analysisJobs  AnalysisJob[]  @relation("CreatedJobs")
+  highlights    Highlight[]    @relation("CreatedHighlights")
+  reports       Report[]       @relation("CreatedReports")
+  annotations   Annotation[]   @relation("CreatedAnnotations")
+  notifications Notification[]
+
+  @@index([teamId])
+  @@index([email])
+  @@map("users")
+}
+
+model Player {
+  id          String    @id @default(uuid())
+  name        String
+  jerseyNumber Int
+  position    String
+  teamId      String
+  dateOfBirth DateTime?
+  nationality String?
+  avatarUrl   String?
+  isActive    Boolean   @default(true)
+  stats       Json?
+  deletedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  team            Team             @relation(fields: [teamId], references: [id])
+  playerTrackings PlayerTracking[]
+  events          Event[]
+  highlights      Highlight[]
+  reports         Report[]         @relation("PlayerReports")
+
+  @@index([teamId])
+  @@map("players")
+}
+
+model Video {
+  id            String        @id @default(uuid())
+  title         String
+  description   String?
+  s3Key         String
+  s3Url         String
+  thumbnailUrl  String?
+  duration      Float?
+  fileSize      BigInt?
+  mimeType      String
+  status        VideoStatus   @default(PENDING)
+  uploadedById  String
+  teamId        String?
+  matchId       String?       @unique
+  category      VideoCategory @default(MATCH)
+  sport         String?
+  tags          String[]
+  viewCount     Int           @default(0)
+  deletedAt     DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  uploadedBy   User          @relation("UploadedVideos", fields: [uploadedById], references: [id])
+  team         Team?         @relation(fields: [teamId], references: [id])
+  match        Match?        @relation(fields: [matchId], references: [id])
+  analysisJobs AnalysisJob[]
+  highlights   Highlight[]
+  annotations  Annotation[]
+
+  @@index([uploadedById])
+  @@index([teamId])
+  @@index([status])
+  @@index([category])
+  @@map("videos")
+}
+
+model Match {
+  id             String         @id @default(uuid())
+  homeTeam       String
+  awayTeam       String
+  homeScore      Int?
+  awayScore      Int?
+  date           DateTime
+  venue          String?
+  competition    String?
+  season         String?
+  sport          String
+  weather        String?
+  result         MatchResult?
+  teamId         String
+  analysisStatus AnalysisStatus @default(PENDING)
+  deletedAt      DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  team         Team          @relation(fields: [teamId], references: [id])
+  video        Video?
+  analysisJobs AnalysisJob[]
+  events       Event[]       @relation("MatchEvents")
+  highlights   Highlight[]
+  reports      Report[]
+
+  @@index([teamId])
+  @@index([season])
+  @@index([competition])
+  @@map("matches")
+}
+
+model AnalysisJob {
+  id           String       @id @default(uuid())
+  videoId      String
+  matchId      String?
+  type         AnalysisType
+  status       JobStatus    @default(QUEUED)
+  modelConfig  Json?
+  resultData   Json?
+  errorMessage String?
+  startedAt    DateTime?
+  completedAt  DateTime?
+  createdById  String
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  video           Video            @relation(fields: [videoId], references: [id])
+  match           Match?           @relation(fields: [matchId], references: [id])
+  createdBy       User             @relation("CreatedJobs", fields: [createdById], references: [id])
+  playerTrackings PlayerTracking[]
+  events          Event[]
+
+  @@index([videoId])
+  @@index([matchId])
+  @@index([createdById])
+  @@index([status])
+  @@map("analysis_jobs")
+}
+
+model PlayerTracking {
+  id              String   @id @default(uuid())
+  analysisJobId   String
+  playerId        String?
+  jerseyNumber    Int
+  frameData       Json
+  distanceCovered Float?
+  topSpeed        Float?
+  sprintCount     Int?
+  heatMapData     Json?
+  createdAt       DateTime @default(now())
+
+  analysisJob AnalysisJob @relation(fields: [analysisJobId], references: [id])
+  player      Player?     @relation(fields: [playerId], references: [id])
+
+  @@index([analysisJobId])
+  @@index([playerId])
+  @@map("player_trackings")
+}
+
+model Event {
+  id            String    @id @default(uuid())
+  analysisJobId String
+  matchId       String?
+  type          EventType
+  timestamp     Float
+  playerId      String?
+  metadata      Json?
+  createdAt     DateTime  @default(now())
+
+  analysisJob AnalysisJob @relation(fields: [analysisJobId], references: [id])
+  match       Match?      @relation("MatchEvents", fields: [matchId], references: [id])
+  player      Player?     @relation(fields: [playerId], references: [id])
+
+  @@index([analysisJobId])
+  @@index([matchId])
+  @@index([playerId])
+  @@index([type])
+  @@map("events")
+}
+
+model Highlight {
+  id           String   @id @default(uuid())
+  title        String
+  videoId      String
+  startTime    Float
+  endTime      Float
+  s3Key        String?
+  thumbnailUrl String?
+  eventType    String?
+  playerId     String?
+  matchId      String?
+  createdById  String
+  isPublic     Boolean  @default(false)
+  viewCount    Int      @default(0)
+  tags         String[]
+  deletedAt    DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  video     Video   @relation(fields: [videoId], references: [id])
+  player    Player? @relation(fields: [playerId], references: [id])
+  match     Match?  @relation(fields: [matchId], references: [id])
+  createdBy User    @relation("CreatedHighlights", fields: [createdById], references: [id])
+
+  @@index([videoId])
+  @@index([matchId])
+  @@index([createdById])
+  @@map("highlights")
+}
+
+model Report {
+  id          String   @id @default(uuid())
+  title       String
+  type        String
+  matchId     String?
+  teamId      String?
+  playerId    String?
+  content     Json?
+  pdfUrl      String?
+  createdById String
+  sharedWith  String[]
+  scheduledAt DateTime?
+  deletedAt   DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  match     Match?  @relation(fields: [matchId], references: [id])
+  team      Team?   @relation(fields: [teamId], references: [id])
+  player    Player? @relation("PlayerReports", fields: [playerId], references: [id])
+  createdBy User    @relation("CreatedReports", fields: [createdById], references: [id])
+
+  @@index([matchId])
+  @@index([teamId])
+  @@index([createdById])
+  @@map("reports")
+}
+
+model Annotation {
+  id          String         @id @default(uuid())
+  videoId     String
+  timestamp   Float
+  type        AnnotationType
+  data        Json
+  createdById String
+  deletedAt   DateTime?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  video     Video @relation(fields: [videoId], references: [id])
+  createdBy User  @relation("CreatedAnnotations", fields: [createdById], references: [id])
+
+  @@index([videoId])
+  @@index([createdById])
+  @@map("annotations")
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  type      String
+  message   String
+  read      Boolean  @default(false)
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([read])
+  @@map("notifications")
+}
