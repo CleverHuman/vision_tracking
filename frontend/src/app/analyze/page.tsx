@@ -3,12 +3,12 @@
 import React, { useState, useEffect, useRef } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
-  videos as mockVideos,
   players as mockPlayers,
   matchEvents as mockMatchEvents,
   heatMapData as mockHeatMapData,
   formations as mockFormations,
 } from "@/data/mock-data";
+import { useVideos } from "@/hooks";
 import type { AnalysisType } from "@/types";
 import { formatDuration, cn } from "@/lib/utils";
 
@@ -163,6 +163,8 @@ const performanceMetrics = {
 // ---------------------------------------------------------------------------
 
 export default function AnalyzePage() {
+  const { data: videos } = useVideos({}, 50);
+
   // State
   const [selectedVideo, setSelectedVideo] = useState<string>("");
   const [analysisType, setAnalysisType] = useState<AnalysisType>("full_match");
@@ -196,7 +198,7 @@ export default function AnalyzePage() {
 
   const feedRef = useRef<HTMLDivElement>(null);
 
-  const selectedVideoData = mockVideos.find((v) => v.id === selectedVideo);
+  const selectedVideoData = (videos ?? []).find((v) => v.id === selectedVideo);
   const totalDuration = selectedVideoData?.duration ?? 5400;
 
   // Simulate analysis progress
@@ -308,7 +310,7 @@ export default function AnalyzePage() {
                       <SelectValue placeholder="Select a video..." />
                     </SelectTrigger>
                     <SelectContent>
-                      {mockVideos.map((video) => (
+                      {(videos ?? []).map((video) => (
                         <SelectItem key={video.id} value={video.id}>
                           {video.title}
                         </SelectItem>

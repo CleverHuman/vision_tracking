@@ -8,7 +8,19 @@
       "Bash(node -e:*)",
       "Bash(npx tsc:*)",
       "Bash(timeout 30 npx next dev:*)",
-      "Bash(timeout 15 npx next dev:*)"
+      "Bash(timeout 15 npx next dev:*)",
+      "Bash(tail:*)",
+      "Bash(grep Error::*)",
+      "Bash(grep:*)",
+      "Bash(cd /e/Work/vision_tracking/frontend && npm run build 2>&1)",
+      "Bash(head:*)",
+      "Bash(cd /e/Work/vision_tracking/frontend && npx eslint src/hooks/use-notifications.ts 2>&1)",
+      "Bash(cd /e/Work/vision_tracking/frontend && npx eslint src/hooks/use-videos.ts src/hooks/use-teams.ts src/hooks/use-paginated.ts 2>&1)",
+      "Bash(cd /e/Work/vision_tracking/frontend && npx eslint src/hooks/use-teams.ts 2>&1)",
+      "Bash(cd /e/Work/vision_tracking/backend/api_server && npx prisma migrate dev --name init 2>&1)",
+      "Bash(true:*)",
+      "Bash(echo No process found on port 3000:*)",
+      "Bash(taskkill:*)"
     ]
   }
 }

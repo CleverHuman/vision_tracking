@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, DragEvent } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
-import { videos as mockVideos } from "@/data/mock-data";
+import { useVideos } from "@/hooks";
 import type { Video, VideoCategory, AnalysisStatus } from "@/types";
 import { formatDuration, formatDate, cn } from "@/lib/utils";
 
@@ -110,29 +110,24 @@ export default function VideosPage() {
   const [filters, setFilters] = useState<Filters>(defaultFilters);
   const [isDragOver, setIsDragOver] = useState(false);
 
-  // ---------- filtering logic ----------
+  // Fetch videos from API
+  const videoFilters = useMemo(
+    () => ({
+      category: activeCategory !== "all" ? activeCategory : undefined,
+      sport: filters.sport !== "all" ? filters.sport : undefined,
+      status: filters.analysisStatus !== "all" ? filters.analysisStatus : undefined,
+      search: searchQuery.trim() || undefined,
+    }),
+    [activeCategory, filters.sport, filters.analysisStatus, searchQuery]
+  );
+  const { data: apiVideos } = useVideos(videoFilters, 50);
+
+  // ---------- filtering logic (client-side for date/duration since API may not support) ----------
 
   const filteredVideos = useMemo(() => {
-    let result = [...mockVideos];
+    let result = [...apiVideos];
 
-    // Category
-    if (activeCategory !== "all") {
-      result = result.filter((v) => v.category === activeCategory);
-    }
-
-    // Search
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      result = result.filter(
-        (v) =>
-          v.title.toLowerCase().includes(q) ||
-          v.teams.some((t) => t.toLowerCase().includes(q)) ||
-          v.tags.some((t) => t.toLowerCase().includes(q)) ||
-          v.players.some((p) => p.toLowerCase().includes(q))
-      );
-    }
-
-    // Date range
+    // Date range (client-side filter)
     if (filters.dateFrom) {
       result = result.filter((v) => new Date(v.uploadDate) >= new Date(filters.dateFrom));
     }
@@ -140,17 +135,7 @@ export default function VideosPage() {
       result = result.filter((v) => new Date(v.uploadDate) <= new Date(filters.dateTo));
     }
 
-    // Sport
-    if (filters.sport !== "all") {
-      result = result.filter((v) => v.sport === filters.sport);
-    }
-
-    // Analysis status
-    if (filters.analysisStatus !== "all") {
-      result = result.filter((v) => v.analysisStatus === filters.analysisStatus);
-    }
-
-    // Duration
+    // Duration (client-side filter)
     if (filters.duration === "short") {
       result = result.filter((v) => v.duration < 1800);
     } else if (filters.duration === "medium") {
@@ -160,7 +145,7 @@ export default function VideosPage() {
     }
 
     return result;
-  }, [activeCategory, searchQuery, filters]);
+  }, [apiVideos, filters.dateFrom, filters.dateTo, filters.duration]);
 
   // ---------- selection helpers ----------
 

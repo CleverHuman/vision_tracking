@@ -3,11 +3,9 @@
 import React from "react";
 import Link from "next/link";
 import { AppLayout } from "@/components/layout/app-layout";
+import { useVideos, usePlayers, useMatches } from "@/hooks";
+import { useAuth } from "@/hooks/use-auth";
 import {
-  currentUser as mockUser,
-  videos as mockVideos,
-  matches as mockMatches,
-  players as mockPlayers,
   activityItems as mockActivities,
   calendarEvents as mockCalendarEvents,
 } from "@/data/mock-data";
@@ -149,6 +147,11 @@ function playerRating(player: Player) {
 // ---------------------------------------------------------------------------
 
 export default function DashboardPage() {
+  const { user } = useAuth();
+  const { data: allVideos } = useVideos({}, 50);
+  const { data: allMatches } = useMatches({}, 50);
+  const { data: allPlayers } = usePlayers({}, 50);
+
   const today = new Date().toLocaleDateString("en-US", {
     weekday: "long",
     year: "numeric",
@@ -156,24 +159,27 @@ export default function DashboardPage() {
     day: "numeric",
   });
 
-  const videosThisWeek = mockVideos.filter((v) => {
+  const videosThisWeek = allVideos.filter((v) => {
     const uploadDate = new Date(v.uploadDate);
     const now = new Date();
     const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     return uploadDate >= weekAgo;
   });
 
-  const activeSessions = mockVideos.filter(
+  const activeSessions = allVideos.filter(
     (v) => v.analysisStatus === "processing"
   ).length;
 
-  const soccerMatches = mockMatches.filter((m) => m.sport === "soccer");
-  const teamPerformance = Math.round(
-    (soccerMatches.filter((m) => m.result === "win").length /
-      soccerMatches.length) *
-      100
-  );
+  const soccerMatches = allMatches.filter((m) => m.sport === "soccer");
+  const teamPerformance = soccerMatches.length > 0
+    ? Math.round(
+        (soccerMatches.filter((m) => m.result === "win").length /
+          soccerMatches.length) *
+          100
+      )
+    : 0;
 
+  // Keep mock data for calendar/activity (no backend endpoints)
   const upcomingMatches = mockCalendarEvents.filter(
     (e) => e.type === "match" && new Date(e.date) > new Date()
   );
@@ -185,9 +191,9 @@ export default function DashboardPage() {
 
   const recentActivities = mockActivities.slice(0, 6);
 
-  const topPlayers = getTopPlayers(mockPlayers, 5);
+  const topPlayers = allPlayers.length > 0 ? getTopPlayers(allPlayers, 5) : [];
 
-  const recentVideos = [...mockVideos]
+  const recentVideos = [...allVideos]
     .sort(
       (a, b) =>
         new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime()
@@ -202,6 +208,8 @@ export default function DashboardPage() {
     team_manager: "Team Manager",
   };
 
+  const userName = user?.name || "User";
+
   return (
     <AppLayout>
       <div className="space-y-6 p-6">
@@ -211,12 +219,12 @@ export default function DashboardPage() {
         <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">
-              Welcome back, {mockUser.name}
+              Welcome back, {userName}
             </h1>
             <p className="text-sm text-muted-foreground">{today}</p>
           </div>
           <Badge variant="sport" className="w-fit">
-            {roleLabelMap[mockUser.role] ?? mockUser.role}
+            {roleLabelMap[user?.role || "coach"] ?? user?.role}
           </Badge>
         </div>
 

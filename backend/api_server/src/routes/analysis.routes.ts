@@ -1,10 +1,9 @@
 import 'express-async-errors';
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
-import { Queue } from 'bullmq';
 import prisma from '../lib/prisma';
 import { getSignedUrl } from '../lib/s3';
-import { visionClient } from '../lib/vision-client';
+import { visionClient, AnalysisPayload } from '../lib/vision-client';
 import { env } from '../config/env';
 import { authenticate } from '../config/auth.middleware';
 import { validate } from '../config/validate.middleware';
@@ -12,16 +11,6 @@ import { AppError } from '../config/error.middleware';
 import { logger } from '../config/logger';
 
 const router = Router();
-
-// ─── BullMQ Queue ──────────────────────────────────────────────────────────────
-
-const redisUrl = new URL(env.REDIS_URL);
-const analysisQueue = new Queue('video-analysis', {
-  connection: {
-    host: redisUrl.hostname,
-    port: Number(redisUrl.port) || 6379,
-  },
-});
 
 // All routes require authentication
 router.use(authenticate);
@@ -74,17 +63,38 @@ router.post(
       },
     });
 
-    // Add job to BullMQ queue
-    await analysisQueue.add('analyze', {
-      jobId: analysisJob.id,
-      videoId,
-      matchId: matchId || null,
-      type,
-      sport: video.sport,
-      modelConfig: modelConfig || null,
-    });
+    // Generate signed URL for the video
+    const signedVideoUrl = await getSignedUrl(video.s3Key!, 7200);
 
-    logger.info('Analysis job queued', {
+    // Dispatch directly to Vision server
+    const payload: AnalysisPayload = {
+      job_id: analysisJob.id,
+      video_url: signedVideoUrl,
+      video_id: videoId,
+      match_id: matchId || null,
+      analysis_type: type,
+      sport: video.sport || 'soccer',
+      model_config: modelConfig || {},
+      webhook_url: `http://api_server:${env.PORT}/api/internal/analysis/webhook`,
+    };
+
+    try {
+      const result = await visionClient.startAnalysis(payload);
+      if (result.accepted) {
+        await prisma.analysisJob.update({
+          where: { id: analysisJob.id },
+          data: { status: 'PROCESSING', startedAt: new Date() },
+        });
+      }
+    } catch (err) {
+      logger.error('Failed to dispatch to Vision server', {
+        jobId: analysisJob.id,
+        error: (err as Error).message,
+      });
+      // Job stays QUEUED — can be retried later
+    }
+
+    logger.info('Analysis job created', {
       jobId: analysisJob.id,
       videoId,
       type,
@@ -92,7 +102,7 @@ router.post(
 
     res.status(201).json({
       job: analysisJob,
-      message: 'Analysis queued',
+      message: 'Analysis started',
     });
   },
 );

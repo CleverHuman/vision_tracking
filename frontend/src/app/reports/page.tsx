@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
+import { useReports } from "@/hooks";
 import { cn } from "@/lib/utils";
 import {
   Card,
@@ -307,6 +308,8 @@ const aiInsights = [
 // ---------------------------------------------------------------------------
 
 export default function ReportsPage() {
+  const { data: apiReports, isLoading } = useReports({}, 50);
+
   const [activeTab, setActiveTab] = useState("all");
   const [showBuilder, setShowBuilder] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
@@ -314,7 +317,27 @@ export default function ReportsPage() {
     "possession",
     "passing",
   ]);
-  const [reportsList] = useState<MockReport[]>(mockReports);
+
+  // Map API reports to local shape, fallback to inline mock data
+  const apiTypeMap: Record<string, ReportType> = {
+    pre_game: "pre-game",
+    post_match: "post-match",
+    player: "player",
+    team: "team",
+    custom: "custom",
+  };
+  const reportsList: MockReport[] = (apiReports && apiReports.length > 0)
+    ? apiReports.map((r) => ({
+        id: r.id,
+        title: r.title,
+        type: apiTypeMap[r.type] || "custom",
+        status: r.status as ReportStatus,
+        createdAt: r.createdAt,
+        updatedAt: r.updatedAt,
+        author: r.author,
+        tags: r.tags,
+      }))
+    : mockReports;
 
   // Chart type toggles
   const [chartOptions, setChartOptions] = useState({
@@ -350,6 +373,16 @@ export default function ReportsPage() {
   // Chart toggle handler
   function toggleChart(key: keyof typeof chartOptions) {
     setChartOptions((prev) => ({ ...prev, [key]: !prev[key] }));
+  }
+
+  if (isLoading) {
+    return (
+      <AppLayout>
+        <div className="flex items-center justify-center h-96">
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </AppLayout>
+    );
   }
 
   return (

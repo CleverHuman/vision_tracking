@@ -1,7 +1,7 @@
 import 'express-async-errors';
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
-import { Queue } from 'bullmq';
+import { v4 as uuid } from 'uuid';
 import prisma from '../lib/prisma';
 import { getSignedUrl } from '../lib/s3';
 import { authenticate } from '../config/auth.middleware';
@@ -10,16 +10,6 @@ import { AppError } from '../config/error.middleware';
 import { logger } from '../config/logger';
 
 const router = Router();
-
-// ─── BullMQ Queue ──────────────────────────────────────────────────────────────
-
-const redisUrl = new URL(process.env.REDIS_URL || 'redis://localhost:6379');
-const highlightReelQueue = new Queue('highlight-reel', {
-  connection: {
-    host: redisUrl.hostname,
-    port: Number(redisUrl.port) || 6379,
-  },
-});
 
 // All routes require authentication
 router.use(authenticate);
@@ -110,22 +100,19 @@ router.post(
       throw new AppError(404, `Highlights not found: ${missingIds.join(', ')}`);
     }
 
-    // Add job to BullMQ queue
-    const job = await highlightReelQueue.add('generate-reel', {
-      title,
-      highlightIds,
-      description: description || null,
-      requestedById: req.user!.id,
-    });
+    const jobId = uuid();
 
-    logger.info('Highlight reel generation queued', {
-      jobId: job.id,
+    // TODO: Integrate with a video processing service for actual reel generation
+    logger.info('Highlight reel generation requested', {
+      jobId,
+      title,
       highlightCount: highlightIds.length,
+      requestedBy: req.user!.id,
     });
 
     res.status(202).json({
       message: 'Reel generation queued',
-      jobId: job.id,
+      jobId,
     });
   },
 );

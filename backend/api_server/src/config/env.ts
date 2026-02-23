@@ -1,8 +1,8 @@
+import 'dotenv/config';
 import { z } from 'zod';
 
 const envSchema = z.object({
   DATABASE_URL: z.string().url(),
-  REDIS_URL: z.string(),
   JWT_SECRET: z.string().min(16),
   JWT_REFRESH_SECRET: z.string().min(16),
   AWS_ACCESS_KEY_ID: z.string(),
@@ -14,7 +14,7 @@ const envSchema = z.object({
   INTERNAL_WEBHOOK_SECRET: z.string(),
   PORT: z.coerce.number().default(3000),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
-  FRONTEND_URL: z.string().url().default('http://localhost:5173'),
+  FRONTEND_URL: z.string().url().default('http://localhost:3001'),
   SMTP_HOST: z.string().default('smtp.mailtrap.io'),
   SMTP_PORT: z.coerce.number().default(587),
   SMTP_USER: z.string().default(''),

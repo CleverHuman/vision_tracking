@@ -1,7 +1,6 @@
 import 'express-async-errors';
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
-import { Queue } from 'bullmq';
 import prisma from '../lib/prisma';
 import { getSignedUrl, deleteFile, generateThumbnailKey } from '../lib/s3';
 import { authenticate } from '../config/auth.middleware';
@@ -10,16 +9,6 @@ import { uploadVideo } from '../config/upload.middleware';
 import { AppError } from '../config/error.middleware';
 
 const router = Router();
-
-// ─── BullMQ Queue ──────────────────────────────────────────────────────────────
-
-const redisUrl = new URL(process.env.REDIS_URL || 'redis://localhost:6379');
-const videoAnalysisQueue = new Queue('video-analysis', {
-  connection: {
-    host: redisUrl.hostname,
-    port: Number(redisUrl.port) || 6379,
-  },
-});
 
 // All routes require authentication
 router.use(authenticate);

@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
-import { players as mockPlayers } from "@/data/mock-data";
+import { usePlayers } from "@/hooks";
 import type { Player } from "@/types";
 import { cn, getInitials } from "@/lib/utils";
 import {
@@ -176,8 +176,10 @@ export default function PlayersPage() {
   const [sortBy, setSortBy] = useState("Name");
   const [comparisonPlayers, setComparisonPlayers] = useState<Player[]>([]);
 
+  const { data: players, isLoading } = usePlayers({}, 50);
+
   // Filter only soccer players for this page
-  const soccerPlayers = useMemo(() => mockPlayers.filter((p) => p.sport === "soccer"), []);
+  const soccerPlayers = useMemo(() => (players ?? []).filter((p) => p.sport === "soccer"), [players]);
 
   // Filtered and sorted players
   const filteredPlayers = useMemo(() => {
@@ -239,6 +241,16 @@ export default function PlayersPage() {
   }
 
   const isComparing = comparisonPlayers.length === 2;
+
+  if (isLoading) {
+    return (
+      <AppLayout>
+        <div className="flex items-center justify-center h-96">
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout>

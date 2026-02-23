@@ -4,7 +4,6 @@ import { z } from 'zod';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import prisma from '../lib/prisma';
-import redis from '../lib/redis';
 import { env } from '../config/env';
 import { authenticate } from '../config/auth.middleware';
 import { validate } from '../config/validate.middleware';
@@ -262,9 +261,6 @@ router.post('/logout', authenticate, async (req: Request, res: Response) => {
     where: { id: req.user!.id },
     data: { refreshToken: null },
   });
-
-  // Invalidate any cached session in Redis
-  await redis.del(`session:${req.user!.id}`);
 
   // Clear cookie
   res.clearCookie('refreshToken', {

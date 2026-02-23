@@ -1,7 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
+import { useTeamPlayers } from "@/hooks";
+import { useAuth } from "@/hooks/use-auth";
 import { cn, getInitials } from "@/lib/utils";
 import {
   Users,
@@ -100,7 +102,7 @@ interface FileRecord {
 // Mock Data
 // ---------------------------------------------------------------------------
 
-const mockPlayers: PlayerRecord[] = [
+const mockPlayersData: PlayerRecord[] = [
   { id: "p1", name: "Aaron Ramsdale", jerseyNumber: 1, position: "Goalkeeper", age: 25, nationality: "England", flag: "\uD83C\uDFF4\uDB40\uDC67\uDB40\uDC62\uDB40\uDC65\uDB40\uDC6E\uDB40\uDC67\uDB40\uDC7F", status: "Active" },
   { id: "p2", name: "Ben White", jerseyNumber: 4, position: "Defender", age: 26, nationality: "England", flag: "\uD83C\uDFF4\uDB40\uDC67\uDB40\uDC62\uDB40\uDC65\uDB40\uDC6E\uDB40\uDC67\uDB40\uDC7F", status: "Active" },
   { id: "p3", name: "William Saliba", jerseyNumber: 12, position: "Defender", age: 23, nationality: "France", flag: "\uD83C\uDDEB\uD83C\uDDF7", status: "Active" },
@@ -372,7 +374,27 @@ function getPositionCategory(position: string): string {
 // Page Component
 // ---------------------------------------------------------------------------
 
+// Map nationality to flag emoji
+function getNationalityFlag(nationality: string): string {
+  const flags: Record<string, string> = {
+    England: "\uD83C\uDFF4\uDB40\uDC67\uDB40\uDC62\uDB40\uDC65\uDB40\uDC6E\uDB40\uDC67\uDB40\uDC7F",
+    France: "\uD83C\uDDEB\uD83C\uDDF7",
+    Brazil: "\uD83C\uDDE7\uD83C\uDDF7",
+    Ukraine: "\uD83C\uDDFA\uD83C\uDDE6",
+    Ghana: "\uD83C\uDDEC\uD83C\uDDED",
+    Norway: "\uD83C\uDDF3\uD83C\uDDF4",
+    Germany: "\uD83C\uDDE9\uD83C\uDDEA",
+    Belgium: "\uD83C\uDDE7\uD83C\uDDEA",
+    Netherlands: "\uD83C\uDDF3\uD83C\uDDF1",
+    Portugal: "\uD83C\uDDF5\uD83C\uDDF9",
+  };
+  return flags[nationality] || "\uD83C\uDFF3\uFE0F";
+}
+
 export default function TeamPage() {
+  const { user } = useAuth();
+  const { data: teamPlayersApi, isLoading } = useTeamPlayers(user?.teamId ?? null);
+
   const [activeTab, setActiveTab] = useState("roster");
   const [searchQuery, setSearchQuery] = useState("");
   const [showAddMember, setShowAddMember] = useState(false);
@@ -381,8 +403,25 @@ export default function TeamPage() {
   const [scheduleWeek, setScheduleWeek] = useState<1 | 2>(1);
   const [pinnedFilter, setPinnedFilter] = useState(false);
 
+  // Map API players to local shape, fallback to inline mock data
+  const teamPlayers: PlayerRecord[] = useMemo(() => {
+    if (teamPlayersApi && teamPlayersApi.length > 0) {
+      return teamPlayersApi.map((p) => ({
+        id: p.id,
+        name: p.name,
+        jerseyNumber: p.jerseyNumber,
+        position: p.position,
+        age: p.age,
+        nationality: p.nationality,
+        flag: getNationalityFlag(p.nationality),
+        status: "Active" as const,
+      }));
+    }
+    return mockPlayersData;
+  }, [teamPlayersApi]);
+
   // Filtered players
-  const filteredPlayers = mockPlayers.filter((p) => {
+  const filteredPlayers = teamPlayers.filter((p) => {
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
     return (
@@ -394,9 +433,9 @@ export default function TeamPage() {
   });
 
   // Roster summary
-  const totalPlayers = mockPlayers.length;
-  const averageAge = Math.round(mockPlayers.reduce((sum, p) => sum + p.age, 0) / totalPlayers * 10) / 10;
-  const positionsBreakdown = mockPlayers.reduce<Record<string, number>>((acc, p) => {
+  const totalPlayers = teamPlayers.length;
+  const averageAge = Math.round(teamPlayers.reduce((sum, p) => sum + p.age, 0) / (totalPlayers || 1) * 10) / 10;
+  const positionsBreakdown = teamPlayers.reduce<Record<string, number>>((acc, p) => {
     const cat = getPositionCategory(p.position);
     acc[cat] = (acc[cat] || 0) + 1;
     return acc;
@@ -420,6 +459,16 @@ export default function TeamPage() {
     );
   }
 
+  if (isLoading) {
+    return (
+      <AppLayout>
+        <div className="flex items-center justify-center h-96">
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </AppLayout>
+    );
+  }
+
   return (
     <AppLayout>
       <div className="space-y-6 p-6">
@@ -429,7 +478,7 @@ export default function TeamPage() {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Team Management</h1>
-            <p className="text-sm text-muted-foreground">Arsenal FC</p>
+            <p className="text-sm text-muted-foreground">{user?.team || "Arsenal FC"}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button

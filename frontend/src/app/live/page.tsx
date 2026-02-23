@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
+import { useLiveAnalysis } from "@/hooks/use-live-analysis";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
@@ -59,7 +60,10 @@ export default function LiveAnalysisPage() {
   const [autoTracking, setAutoTracking] = useState(true);
   const [instantReplay, setInstantReplay] = useState(true);
   const [showHeatMap, setShowHeatMap] = useState(false);
-  const connectionStatus: "connected" | "disconnected" | "connecting" = isLive ? "connected" : "disconnected";
+  const [activeJobId] = useState<string | null>(null);
+
+  // Socket.IO live analysis connection (wired up for future use)
+  useLiveAnalysis(isLive ? activeJobId : null);
 
   useEffect(() => {
     if (!isLive) return;

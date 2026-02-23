@@ -30,8 +30,16 @@ import {
   Camera,
   Keyboard,
 } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
 
 export default function SettingsPage() {
+  const { user } = useAuth();
+  const userName = user?.name || "Marcus Thompson";
+  const userEmail = user?.email || "marcus@visiontrack.com";
+  const userRole = user?.role || "coach";
+  const userTeam = user?.team || "Arsenal FC";
+  const userInitials = userName.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
+
   const [notifications, setNotifications] = useState({
     email: true,
     push: true,
@@ -87,15 +95,15 @@ export default function SettingsPage() {
                 <div className="flex items-center gap-6">
                   <div className="relative">
                     <div className="h-20 w-20 rounded-full bg-primary/20 flex items-center justify-center text-primary text-2xl font-bold">
-                      MT
+                      {userInitials}
                     </div>
                     <Button size="icon" variant="outline" className="absolute -bottom-1 -right-1 h-7 w-7 rounded-full">
                       <Camera className="h-3.5 w-3.5" />
                     </Button>
                   </div>
                   <div>
-                    <h3 className="font-semibold">Marcus Thompson</h3>
-                    <p className="text-sm text-muted-foreground">Head Coach &middot; Arsenal FC</p>
+                    <h3 className="font-semibold">{userName}</h3>
+                    <p className="text-sm text-muted-foreground">{userRole.charAt(0).toUpperCase() + userRole.slice(1)} &middot; {userTeam}</p>
                     <Button variant="outline" size="sm" className="mt-2 gap-1">
                       <Upload className="h-3.5 w-3.5" />
                       Upload Photo
@@ -106,15 +114,15 @@ export default function SettingsPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Full Name</Label>
-                    <Input defaultValue="Marcus Thompson" />
+                    <Input defaultValue={userName} />
                   </div>
                   <div className="space-y-2">
                     <Label>Email</Label>
-                    <Input defaultValue="marcus@visiontrack.com" type="email" />
+                    <Input defaultValue={userEmail} type="email" />
                   </div>
                   <div className="space-y-2">
                     <Label>Role</Label>
-                    <Select defaultValue="coach">
+                    <Select defaultValue={userRole}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="coach">Coach</SelectItem>
@@ -127,7 +135,7 @@ export default function SettingsPage() {
                   </div>
                   <div className="space-y-2">
                     <Label>Sport</Label>
-                    <Select defaultValue="soccer">
+                    <Select defaultValue={user?.sport || "soccer"}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="soccer">Soccer / Football</SelectItem>
@@ -140,7 +148,7 @@ export default function SettingsPage() {
                   </div>
                   <div className="space-y-2">
                     <Label>Team / Organization</Label>
-                    <Input defaultValue="Arsenal FC" />
+                    <Input defaultValue={userTeam} />
                   </div>
                   <div className="space-y-2">
                     <Label>Phone</Label>

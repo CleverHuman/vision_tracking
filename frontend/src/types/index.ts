@@ -14,6 +14,7 @@ export interface User {
   role: UserRole;
   sport: Sport;
   team: string;
+  teamId?: string;
   avatar?: string;
 }
 

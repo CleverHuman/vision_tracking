@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useAppStore } from "@/store/app-store";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -39,6 +40,12 @@ const registerSchema = z
       .min(1, "Full name is required")
       .min(2, "Name must be at least 2 characters")
       .max(100, "Name must be under 100 characters"),
+    username: z
+      .string()
+      .min(1, "Username is required")
+      .min(3, "Username must be at least 3 characters")
+      .max(30, "Username must be under 30 characters")
+      .regex(/^[a-zA-Z0-9_]+$/, "Username can only contain letters, numbers, and underscores"),
     email: z
       .string()
       .min(1, "Email is required")
@@ -89,6 +96,8 @@ export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [apiError, setApiError] = useState<string | null>(null);
+  const registerUser = useAppStore((s) => s.register);
 
   const {
     register,
@@ -100,6 +109,7 @@ export default function RegisterPage() {
     resolver: zodResolver(registerSchema),
     defaultValues: {
       fullName: "",
+      username: "",
       email: "",
       password: "",
       confirmPassword: "",
@@ -114,13 +124,22 @@ export default function RegisterPage() {
 
   const onSubmit = async (data: RegisterFormValues) => {
     setIsSubmitting(true);
+    setApiError(null);
     try {
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-      console.log("Registration data:", data);
+      await registerUser({
+        fullName: data.fullName,
+        email: data.email,
+        username: data.username,
+        password: data.password,
+        role: data.role,
+        sport: data.sport,
+        organization: data.organization,
+      });
       router.push("/dashboard");
-    } catch {
-      console.error("Registration failed");
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Registration failed. Please try again.";
+      setApiError(message);
     } finally {
       setIsSubmitting(false);
     }
@@ -268,6 +287,35 @@ export default function RegisterPage() {
                     {errors.fullName && (
                       <p className="text-xs text-red-400">
                         {errors.fullName.message}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Username */}
+                  <div className="space-y-2">
+                    <Label
+                      htmlFor="username"
+                      className="text-sm font-medium text-slate-300"
+                    >
+                      Username
+                    </Label>
+                    <div className="relative">
+                      <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                      <Input
+                        id="username"
+                        type="text"
+                        placeholder="johndoe"
+                        className={cn(
+                          "h-11 border-[#1e3a5f] bg-[#0a0e1a]/60 pl-10 text-white placeholder:text-slate-500 focus-visible:ring-[#22c55e]/50",
+                          errors.username &&
+                            "border-red-500/50 focus-visible:ring-red-500/50"
+                        )}
+                        {...register("username")}
+                      />
+                    </div>
+                    {errors.username && (
+                      <p className="text-xs text-red-400">
+                        {errors.username.message}
                       </p>
                     )}
                   </div>
@@ -563,6 +611,13 @@ export default function RegisterPage() {
                       </p>
                     )}
                   </div>
+
+                  {/* API Error */}
+                  {apiError && (
+                    <div className="rounded-md bg-red-500/10 border border-red-500/30 px-4 py-3 text-sm text-red-400">
+                      {apiError}
+                    </div>
+                  )}
 
                   {/* Submit Button */}
                   <Button

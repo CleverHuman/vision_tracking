@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useAppStore } from "@/store/app-store";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -56,6 +57,8 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
+  const [apiError, setApiError] = useState<string | null>(null);
+  const login = useAppStore((s) => s.login);
 
   const {
     register,
@@ -71,13 +74,14 @@ export default function LoginPage() {
 
   const onSubmit = async (data: LoginFormValues) => {
     setIsSubmitting(true);
+    setApiError(null);
     try {
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-      console.log("Login attempt:", { ...data, rememberMe });
+      await login(data.email, data.password);
       router.push("/dashboard");
-    } catch {
-      console.error("Login failed");
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Login failed. Please try again.";
+      setApiError(message);
     } finally {
       setIsSubmitting(false);
     }
@@ -210,6 +214,13 @@ export default function LoginPage() {
                       Forgot password?
                     </Link>
                   </div>
+
+                  {/* API Error */}
+                  {apiError && (
+                    <div className="rounded-md bg-red-500/10 border border-red-500/30 px-4 py-3 text-sm text-red-400">
+                      {apiError}
+                    </div>
+                  )}
 
                   {/* Submit Button */}
                   <Button

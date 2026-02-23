@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
-import { mockMatches } from "@/data/mock-data";
+import { useMatches } from "@/hooks";
 import type { Match, MatchResult } from "@/types";
 import { formatDate, cn } from "@/lib/utils";
 
@@ -109,11 +109,13 @@ export default function HistoryPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [viewMode, setViewMode] = useState<ViewMode>("table");
 
+  const { data: matches, isLoading } = useMatches({}, 50);
+
   // -- derived data ---------------------------------------------------------
 
   const soccerMatches = useMemo(
-    () => mockMatches.filter((m) => m.sport === "soccer"),
-    []
+    () => (matches ?? []).filter((m) => m.sport === "soccer"),
+    [matches]
   );
 
   const filteredMatches = useMemo(() => {
@@ -271,6 +273,16 @@ export default function HistoryPage() {
   };
 
   // -- render ---------------------------------------------------------------
+
+  if (isLoading) {
+    return (
+      <AppLayout>
+        <div className="flex items-center justify-center h-96">
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout>
