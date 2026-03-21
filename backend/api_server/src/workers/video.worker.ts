@@ -1,5 +1,4 @@
 import prisma from '../lib/prisma';
-import { getSignedUrl } from '../lib/storage';
 import { visionClient, AnalysisPayload } from '../lib/vision-client';
 import { logger } from '../config/logger';
 import { env } from '../config/env';
@@ -33,22 +32,20 @@ export async function processVideoAnalysis(data: VideoAnalysisJobData): Promise<
       data: { status: 'PROCESSING', startedAt: new Date() },
     });
 
-    // 2. Fetch Video s3Key and generate signed URL
+    // 2. Fetch Video URL
     const video = await prisma.video.findUnique({
       where: { id: videoId },
-      select: { s3Key: true, sport: true },
+      select: { s3Url: true, sport: true },
     });
 
     if (!video) {
       throw new Error(`Video not found: ${videoId}`);
     }
 
-    const signedVideoUrl = await getSignedUrl(video.s3Key, 7200); // 2 hour expiry
-
     // 3. POST to Python Vision_server
     const payload: AnalysisPayload = {
       job_id: jobId,
-      video_url: signedVideoUrl,
+      video_url: video.s3Url,
       video_id: videoId,
       match_id: matchId,
       analysis_type: type,

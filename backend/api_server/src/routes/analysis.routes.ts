@@ -2,7 +2,6 @@ import 'express-async-errors';
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import prisma from '../lib/prisma';
-import { getSignedUrl } from '../lib/storage';
 import { visionClient, AnalysisPayload } from '../lib/vision-client';
 import { env } from '../config/env';
 import { authenticate } from '../config/auth.middleware';
@@ -44,7 +43,7 @@ router.post(
     // Verify video exists
     const video = await prisma.video.findUnique({
       where: { id: videoId },
-      select: { id: true, s3Key: true, sport: true },
+      select: { id: true, s3Key: true, s3Url: true, sport: true },
     });
 
     if (!video) {
@@ -63,13 +62,10 @@ router.post(
       },
     });
 
-    // Generate signed URL for the video
-    const signedVideoUrl = await getSignedUrl(video.s3Key!, 7200);
-
     // Dispatch directly to Vision server
     const payload: AnalysisPayload = {
       job_id: analysisJob.id,
-      video_url: signedVideoUrl,
+      video_url: video.s3Url,
       video_id: videoId,
       match_id: matchId || null,
       analysis_type: type,

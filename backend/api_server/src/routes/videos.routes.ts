@@ -1,8 +1,9 @@
 import 'express-async-errors';
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
+import fs from 'fs';
+import path from 'path';
 import prisma from '../lib/prisma';
-import { getSignedUrl, deleteFile, generateThumbnailKey, videoStorage } from '../lib/storage';
 import { authenticate } from '../config/auth.middleware';
 import { validate } from '../config/validate.middleware';
 import { uploadVideo } from '../config/upload.middleware';
@@ -55,7 +56,7 @@ router.post(
   ...uploadVideo,
   validate({ body: uploadVideoSchema }),
   async (req: Request, res: Response) => {
-    const file = req.file as (Express.Multer.File & { key: string; location: string }) | undefined;
+    const file = req.file;
 
     if (!file) {
       throw new AppError(400, 'Video file is required');
@@ -67,8 +68,8 @@ router.post(
       data: {
         title,
         description,
-        s3Key: file.key,
-        s3Url: file.location,
+        s3Key: file.filename,
+        s3Url: `/uploads/videos/${file.filename}`,
         mimeType: file.mimetype,
         fileSize: file.size,
         status: 'UPLOADING',
@@ -199,16 +200,13 @@ router.get('/:id', async (req: Request, res: Response) => {
     throw new AppError(404, 'Video not found');
   }
 
-  // Generate a signed S3 URL (1 hour expiry)
-  const signedUrl = await getSignedUrl(video.s3Key, 3600);
-
   // Increment viewCount
   await prisma.video.update({
     where: { id: req.params.id },
     data: { viewCount: { increment: 1 } },
   });
 
-  res.status(200).json({ ...video, signedUrl });
+  res.status(200).json({ ...video, signedUrl: video.s3Url });
 });
 
 // ─── PATCH /:id — Update metadata ───────────────────────────────────────────────
@@ -261,8 +259,11 @@ router.delete('/:id', async (req: Request, res: Response) => {
     data: { deletedAt: new Date() },
   });
 
-  // Delete S3 object
-  await deleteFile(video.s3Key);
+  // Delete local file
+  const filePath = path.join(process.cwd(), 'uploads', 'videos', video.s3Key);
+  if (fs.existsSync(filePath)) {
+    fs.unlinkSync(filePath);
+  }
 
   res.status(200).json({ message: 'Video deleted' });
 });
@@ -281,8 +282,7 @@ router.post(
       throw new AppError(404, 'Video not found');
     }
 
-    const thumbnailKey = generateThumbnailKey(video.id);
-    const thumbnailUrl = await videoStorage.getAccessUrl(thumbnailKey);
+    const thumbnailUrl = `/uploads/videos/thumb_${video.id}.jpg`;
 
     const updatedVideo = await prisma.video.update({
       where: { id: req.params.id },

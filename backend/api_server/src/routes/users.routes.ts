@@ -7,7 +7,6 @@ import { requireRole } from '../config/rbac.middleware';
 import { validate } from '../config/validate.middleware';
 import { uploadAvatar } from '../config/upload.middleware';
 import { AppError } from '../config/error.middleware';
-import { s3DeleteFile } from '../lib/storage';
 
 const router = Router();
 
@@ -151,20 +150,9 @@ router.patch(
     if (sport !== undefined) updateData.sport = sport;
     if (teamId !== undefined) updateData.teamId = teamId;
 
-    // Handle avatar upload via multer-s3
-    const file = req.file as Express.MulterS3.File | undefined;
-    if (file) {
-      // Delete old avatar from S3 if it exists
-      if (existingUser.avatarUrl) {
-        try {
-          const url = new URL(existingUser.avatarUrl);
-          const oldKey = url.pathname.slice(1); // remove leading "/"
-          await s3DeleteFile(oldKey);
-        } catch {
-          // Ignore errors when deleting old avatar
-        }
-      }
-      updateData.avatarUrl = file.location;
+    // Handle avatar upload
+    if (req.file) {
+      updateData.avatarUrl = `/uploads/avatars/${req.file.filename}`;
     }
 
     const updatedUser = await prisma.user.update({

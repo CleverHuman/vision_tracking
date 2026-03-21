@@ -3,7 +3,6 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { v4 as uuid } from 'uuid';
 import prisma from '../lib/prisma';
-import { getSignedUrl } from '../lib/storage';
 import { authenticate } from '../config/auth.middleware';
 import { validate } from '../config/validate.middleware';
 import { AppError } from '../config/error.middleware';
@@ -212,19 +211,13 @@ router.get('/:id', async (req: Request, res: Response) => {
     throw new AppError(404, 'Highlight not found');
   }
 
-  // Generate signed S3 URL if s3Key exists
-  let signedUrl: string | null = null;
-  if (highlight.s3Key) {
-    signedUrl = await getSignedUrl(highlight.s3Key, 3600);
-  }
-
   // Increment viewCount
   await prisma.highlight.update({
     where: { id: req.params.id },
     data: { viewCount: { increment: 1 } },
   });
 
-  res.status(200).json({ ...highlight, signedUrl });
+  res.status(200).json(highlight);
 });
 
 // ─── DELETE /:id — Soft delete ──────────────────────────────────────────────────

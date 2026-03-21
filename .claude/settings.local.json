@@ -6,7 +6,17 @@
       "Bash(head:*)",
       "Bash(cd E:/Work/vision_tracking/backend/api_server && npx tsc --noEmit 2>&1)",
       "Bash(node:*)",
-      "Bash(netstat -ano)"
+      "Bash(netstat -ano)",
+      "Bash(findstr \":3000\")",
+      "Bash(npx ts-node:*)",
+      "Bash(curl -s http://localhost:3000/health)",
+      "Bash(tasklist:*)",
+      "Bash(curl:*)",
+      "Bash(findstr \"LISTENING\")",
+      "Bash(npx ts-node-dev:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(findstr \":5432\")",
+      "Bash(npx prisma:*)"
     ]
   }
 }
