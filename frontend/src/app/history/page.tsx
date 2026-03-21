@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
-import { useMatches } from "@/hooks";
+import { matches as mockMatchesData } from "@/data/mock-data";
 import type { Match, MatchResult } from "@/types";
 import { formatDate, cn } from "@/lib/utils";
 
@@ -109,7 +109,7 @@ export default function HistoryPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [viewMode, setViewMode] = useState<ViewMode>("table");
 
-  const { data: matches, isLoading } = useMatches({}, 50);
+  const matches = mockMatchesData;
 
   // -- derived data ---------------------------------------------------------
 
@@ -273,16 +273,6 @@ export default function HistoryPage() {
   };
 
   // -- render ---------------------------------------------------------------
-
-  if (isLoading) {
-    return (
-      <AppLayout>
-        <div className="flex items-center justify-center h-96">
-          <p className="text-muted-foreground">Loading...</p>
-        </div>
-      </AppLayout>
-    );
-  }
 
   return (
     <AppLayout>

@@ -2,7 +2,6 @@
 
 import React, { useState } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
-import { useHighlights } from "@/hooks";
 import { cn } from "@/lib/utils";
 import {
   Card,
@@ -348,8 +347,6 @@ function formatSecondsToDisplay(totalSeconds: number): string {
 // ---------------------------------------------------------------------------
 
 export default function HighlightsPage() {
-  const { data: apiHighlights, isLoading } = useHighlights({}, 50);
-
   const [activeCategory, setActiveCategory] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [playerFilter, setPlayerFilter] = useState("all");
@@ -368,21 +365,7 @@ export default function HighlightsPage() {
   const [addTeamLogo, setAddTeamLogo] = useState(true);
   const [watermarkText, setWatermarkText] = useState("");
 
-  // ---------- Map API highlights to local shape, fallback to inline mock ----------
-
-  const highlights: Highlight[] = (apiHighlights && apiHighlights.length > 0)
-    ? apiHighlights.map((h) => ({
-        id: h.id,
-        title: h.title,
-        player: h.player ?? "Unknown",
-        match: h.match ?? "Unknown",
-        date: h.createdAt,
-        duration: `${Math.floor((h.endTime - h.startTime) / 60)}:${String((h.endTime - h.startTime) % 60).padStart(2, "0")}`,
-        eventType: (h.eventType || "skill") as EventType,
-        rating: 4,
-        views: 0,
-      }))
-    : mockHighlights;
+  const highlights: Highlight[] = mockHighlights;
 
   // ---------- Derived data ----------
 
@@ -461,16 +444,6 @@ export default function HighlightsPage() {
   // -----------------------------------------------------------------------
   // JSX
   // -----------------------------------------------------------------------
-
-  if (isLoading) {
-    return (
-      <AppLayout>
-        <div className="flex items-center justify-center h-96">
-          <p className="text-muted-foreground">Loading...</p>
-        </div>
-      </AppLayout>
-    );
-  }
 
   return (
     <AppLayout>

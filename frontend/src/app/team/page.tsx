@@ -2,7 +2,6 @@
 
 import React, { useState, useMemo } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
-import { useTeamPlayers } from "@/hooks";
 import { useAuth } from "@/hooks/use-auth";
 import { cn, getInitials } from "@/lib/utils";
 import {
@@ -393,7 +392,6 @@ function getNationalityFlag(nationality: string): string {
 
 export default function TeamPage() {
   const { user } = useAuth();
-  const { data: teamPlayersApi, isLoading } = useTeamPlayers(user?.teamId ?? null);
 
   const [activeTab, setActiveTab] = useState("roster");
   const [searchQuery, setSearchQuery] = useState("");
@@ -403,22 +401,7 @@ export default function TeamPage() {
   const [scheduleWeek, setScheduleWeek] = useState<1 | 2>(1);
   const [pinnedFilter, setPinnedFilter] = useState(false);
 
-  // Map API players to local shape, fallback to inline mock data
-  const teamPlayers: PlayerRecord[] = useMemo(() => {
-    if (teamPlayersApi && teamPlayersApi.length > 0) {
-      return teamPlayersApi.map((p) => ({
-        id: p.id,
-        name: p.name,
-        jerseyNumber: p.jerseyNumber,
-        position: p.position,
-        age: p.age,
-        nationality: p.nationality,
-        flag: getNationalityFlag(p.nationality),
-        status: "Active" as const,
-      }));
-    }
-    return mockPlayersData;
-  }, [teamPlayersApi]);
+  const teamPlayers: PlayerRecord[] = mockPlayersData;
 
   // Filtered players
   const filteredPlayers = teamPlayers.filter((p) => {
@@ -456,16 +439,6 @@ export default function TeamPage() {
   function toggleSelectMember(id: string) {
     setSelectedMembers((prev) =>
       prev.includes(id) ? prev.filter((m) => m !== id) : [...prev, id]
-    );
-  }
-
-  if (isLoading) {
-    return (
-      <AppLayout>
-        <div className="flex items-center justify-center h-96">
-          <p className="text-muted-foreground">Loading...</p>
-        </div>
-      </AppLayout>
     );
   }
 

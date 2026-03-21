@@ -3,11 +3,13 @@
 import React from "react";
 import Link from "next/link";
 import { AppLayout } from "@/components/layout/app-layout";
-import { useVideos, usePlayers, useMatches } from "@/hooks";
 import { useAuth } from "@/hooks/use-auth";
 import {
   activityItems as mockActivities,
   calendarEvents as mockCalendarEvents,
+  videos as mockVideos,
+  players as mockPlayers,
+  matches as mockMatches,
 } from "@/data/mock-data";
 import type { ActivityItem, CalendarEvent, Player, Video } from "@/types";
 import { formatRelativeTime, formatDate, getInitials } from "@/lib/utils";
@@ -148,9 +150,9 @@ function playerRating(player: Player) {
 
 export default function DashboardPage() {
   const { user } = useAuth();
-  const { data: allVideos } = useVideos({}, 50);
-  const { data: allMatches } = useMatches({}, 50);
-  const { data: allPlayers } = usePlayers({}, 50);
+  const allVideos = mockVideos;
+  const allMatches = mockMatches;
+  const allPlayers = mockPlayers;
 
   const today = new Date().toLocaleDateString("en-US", {
     weekday: "long",

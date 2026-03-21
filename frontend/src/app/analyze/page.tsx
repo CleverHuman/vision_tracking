@@ -8,7 +8,7 @@ import {
   heatMapData as mockHeatMapData,
   formations as mockFormations,
 } from "@/data/mock-data";
-import { useVideos } from "@/hooks";
+import { videos as mockVideosData } from "@/data/mock-data";
 import type { AnalysisType } from "@/types";
 import { formatDuration, cn } from "@/lib/utils";
 
@@ -163,7 +163,7 @@ const performanceMetrics = {
 // ---------------------------------------------------------------------------
 
 export default function AnalyzePage() {
-  const { data: videos } = useVideos({}, 50);
+  const videos = mockVideosData;
 
   // State
   const [selectedVideo, setSelectedVideo] = useState<string>("");

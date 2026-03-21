@@ -2,8 +2,7 @@
 
 import React, { useState, useMemo, useRef, useCallback, DragEvent, ChangeEvent } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
-import { useVideos, useVideoUpload } from "@/hooks";
-import { videoCategoryToBackend } from "@/lib/mappers";
+import { videos as mockVideosData } from "@/data/mock-data";
 import type { Video, VideoCategory, AnalysisStatus } from "@/types";
 import { formatDuration, formatDate, cn } from "@/lib/utils";
 
@@ -144,21 +143,19 @@ export default function VideosPage() {
   const [isUploading, setIsUploading] = useState(false);
   const [editingItem, setEditingItem] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { mutate: uploadVideo } = useVideoUpload();
-
-  const videoFilters = useMemo(
-    () => ({
-      category: activeCategory !== "all" ? activeCategory : undefined,
-      sport: filters.sport !== "all" ? filters.sport : undefined,
-      status: filters.analysisStatus !== "all" ? filters.analysisStatus : undefined,
-      search: searchQuery.trim() || undefined,
-    }),
-    [activeCategory, filters.sport, filters.analysisStatus, searchQuery]
-  );
-  const { data: apiVideos, refresh: refreshVideos } = useVideos(videoFilters, 50);
+  const allVideos = mockVideosData;
 
   const filteredVideos = useMemo(() => {
-    let result = [...apiVideos];
+    let result = [...allVideos].filter((v) => {
+      if (activeCategory !== "all" && v.category !== activeCategory) return false;
+      if (filters.sport !== "all" && v.sport !== filters.sport) return false;
+      if (filters.analysisStatus !== "all" && v.analysisStatus !== filters.analysisStatus) return false;
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        if (!v.title.toLowerCase().includes(q) && !v.tags.some((t) => t.toLowerCase().includes(q))) return false;
+      }
+      return true;
+    });
 
     if (filters.dateFrom) {
       result = result.filter((v) => new Date(v.uploadDate) >= new Date(filters.dateFrom));
@@ -235,17 +232,10 @@ export default function VideosPage() {
     for (const item of pending) {
       updateUploadItem(item.id, { status: "uploading", progress: 20 });
 
-      const formData = new FormData();
-      formData.append("video", item.file);
-      formData.append("title", item.title);
-      if (item.description) formData.append("description", item.description);
-      formData.append("category", videoCategoryToBackend(item.category));
-      if (item.sport) formData.append("sport", item.sport);
-      if (item.tags) formData.append("tags", item.tags);
-
       try {
         updateUploadItem(item.id, { progress: 50 });
-        await uploadVideo(formData);
+        // TODO: integrate with backend upload API
+        await new Promise((resolve) => setTimeout(resolve, 1000));
         updateUploadItem(item.id, { status: "done", progress: 100 });
       } catch (err) {
         updateUploadItem(item.id, {
@@ -257,8 +247,7 @@ export default function VideosPage() {
     }
 
     setIsUploading(false);
-    refreshVideos();
-  }, [uploadItems, uploadVideo, updateUploadItem, refreshVideos]);
+  }, [uploadItems, updateUploadItem]);
 
   const handleFileInputChange = (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {

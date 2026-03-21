@@ -2,14 +2,14 @@
 
 import { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { useAppStore } from "@/store/app-store";
+import { useAuth } from "@/hooks/use-auth";
 
 const PUBLIC_PATHS = ["/login", "/register", "/forgot-password", "/reset-password"];
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { isAuthenticated, isAuthLoading, checkAuth } = useAppStore();
+  const { isAuthenticated, isAuthLoading, checkAuth } = useAuth();
 
   useEffect(() => {
     checkAuth();

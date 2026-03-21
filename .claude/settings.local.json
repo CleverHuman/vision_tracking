@@ -16,7 +16,9 @@
       "Bash(npx ts-node-dev:*)",
       "Bash(npm uninstall:*)",
       "Bash(findstr \":5432\")",
-      "Bash(npx prisma:*)"
+      "Bash(npx prisma:*)",
+      "Bash(xargs grep:*)",
+      "Bash(npm install:*)"
     ]
   }
 }
