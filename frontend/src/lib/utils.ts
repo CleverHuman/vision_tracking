@@ -38,7 +38,7 @@ export function formatRelativeTime(date: string | Date): string {
 
 export function getInitials(name: string): string {
   return name
-    .split(" ")
+    ?.split(" ")
     .map((n) => n[0])
     .join("")
     .toUpperCase()

@@ -2,7 +2,7 @@ import 'express-async-errors';
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import prisma from '../lib/prisma';
-import { getSignedUrl, deleteFile, generateThumbnailKey } from '../lib/s3';
+import { getSignedUrl, deleteFile, generateThumbnailKey, videoStorage } from '../lib/storage';
 import { authenticate } from '../config/auth.middleware';
 import { validate } from '../config/validate.middleware';
 import { uploadVideo } from '../config/upload.middleware';
@@ -52,10 +52,10 @@ const batchStatusSchema = z.object({
 
 router.post(
   '/upload',
-  uploadVideo,
+  ...uploadVideo,
   validate({ body: uploadVideoSchema }),
   async (req: Request, res: Response) => {
-    const file = req.file as Express.MulterS3.File | undefined;
+    const file = req.file as (Express.Multer.File & { key: string; location: string }) | undefined;
 
     if (!file) {
       throw new AppError(400, 'Video file is required');
@@ -282,7 +282,7 @@ router.post(
     }
 
     const thumbnailKey = generateThumbnailKey(video.id);
-    const thumbnailUrl = `https://${process.env.S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${thumbnailKey}`;
+    const thumbnailUrl = await videoStorage.getAccessUrl(thumbnailKey);
 
     const updatedVideo = await prisma.video.update({
       where: { id: req.params.id },

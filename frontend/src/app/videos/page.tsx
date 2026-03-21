@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState, useMemo, DragEvent } from "react";
+import React, { useState, useMemo, useRef, useCallback, DragEvent, ChangeEvent } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
-import { useVideos } from "@/hooks";
+import { useVideos, useVideoUpload } from "@/hooks";
+import { videoCategoryToBackend } from "@/lib/mappers";
 import type { Video, VideoCategory, AnalysisStatus } from "@/types";
 import { formatDuration, formatDate, cn } from "@/lib/utils";
 
@@ -12,6 +13,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Progress } from "@/components/ui/progress";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectTrigger,
@@ -38,11 +50,11 @@ import {
   X,
   Film,
   CheckSquare,
+  FileVideo,
+  Loader2,
+  CheckCircle2,
+  AlertCircle,
 } from "lucide-react";
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 const _categoryLabels: Record<VideoCategory, string> = {
   match: "Match Footage",
@@ -75,9 +87,33 @@ function getAnalysisBadge(status: AnalysisStatus) {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Filters state shape
-// ---------------------------------------------------------------------------
+const ACCEPTED_VIDEO_TYPES = ["video/mp4", "video/quicktime", "video/x-msvideo", "video/webm", "video/x-matroska"];
+const ACCEPTED_EXTENSIONS = ".mp4,.mov,.avi,.webm,.mkv";
+const MAX_FILE_SIZE = 5 * 1024 * 1024 * 1024; // 5 GB
+
+interface UploadItem {
+  id: string;
+  file: File;
+  title: string;
+  description: string;
+  category: VideoCategory;
+  sport: string;
+  tags: string;
+  status: "pending" | "uploading" | "done" | "error";
+  progress: number;
+  error?: string;
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+function generateId(): string {
+  return Math.random().toString(36).slice(2, 10);
+}
 
 interface Filters {
   dateFrom: string;
@@ -95,12 +131,7 @@ const defaultFilters: Filters = {
   duration: "all",
 };
 
-// ---------------------------------------------------------------------------
-// Page Component
-// ---------------------------------------------------------------------------
-
 export default function VideosPage() {
-  // View & UI state
   const [viewMode, setViewMode] = useState<"grid" | "list" | "timeline">("grid");
   const [searchQuery, setSearchQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState<"all" | VideoCategory>("all");
@@ -109,8 +140,12 @@ export default function VideosPage() {
   const [selectedVideos, setSelectedVideos] = useState<string[]>([]);
   const [filters, setFilters] = useState<Filters>(defaultFilters);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [uploadItems, setUploadItems] = useState<UploadItem[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const [editingItem, setEditingItem] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { mutate: uploadVideo } = useVideoUpload();
 
-  // Fetch videos from API
   const videoFilters = useMemo(
     () => ({
       category: activeCategory !== "all" ? activeCategory : undefined,
@@ -120,14 +155,11 @@ export default function VideosPage() {
     }),
     [activeCategory, filters.sport, filters.analysisStatus, searchQuery]
   );
-  const { data: apiVideos } = useVideos(videoFilters, 50);
-
-  // ---------- filtering logic (client-side for date/duration since API may not support) ----------
+  const { data: apiVideos, refresh: refreshVideos } = useVideos(videoFilters, 50);
 
   const filteredVideos = useMemo(() => {
     let result = [...apiVideos];
 
-    // Date range (client-side filter)
     if (filters.dateFrom) {
       result = result.filter((v) => new Date(v.uploadDate) >= new Date(filters.dateFrom));
     }
@@ -135,7 +167,6 @@ export default function VideosPage() {
       result = result.filter((v) => new Date(v.uploadDate) <= new Date(filters.dateTo));
     }
 
-    // Duration (client-side filter)
     if (filters.duration === "short") {
       result = result.filter((v) => v.duration < 1800);
     } else if (filters.duration === "medium") {
@@ -146,8 +177,6 @@ export default function VideosPage() {
 
     return result;
   }, [apiVideos, filters.dateFrom, filters.dateTo, filters.duration]);
-
-  // ---------- selection helpers ----------
 
   const toggleSelect = (id: string) => {
     setSelectedVideos((prev) =>
@@ -163,7 +192,87 @@ export default function VideosPage() {
     }
   };
 
-  // ---------- drag & drop handlers ----------
+  const addFiles = useCallback((files: FileList | File[]) => {
+    const newItems: UploadItem[] = [];
+    for (const file of Array.from(files)) {
+      if (!ACCEPTED_VIDEO_TYPES.includes(file.type)) continue;
+      if (file.size > MAX_FILE_SIZE) continue;
+      const name = file.name.replace(/\.[^.]+$/, "");
+      newItems.push({
+        id: generateId(),
+        file,
+        title: name,
+        description: "",
+        category: "match",
+        sport: "soccer",
+        tags: "",
+        status: "pending",
+        progress: 0,
+      });
+    }
+    if (newItems.length > 0) {
+      setUploadItems((prev) => [...prev, ...newItems]);
+      if (!showUpload) setShowUpload(true);
+    }
+  }, [showUpload]);
+
+  const removeUploadItem = useCallback((id: string) => {
+    setUploadItems((prev) => prev.filter((item) => item.id !== id));
+  }, []);
+
+  const updateUploadItem = useCallback((id: string, updates: Partial<UploadItem>) => {
+    setUploadItems((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, ...updates } : item))
+    );
+  }, []);
+
+  const handleUploadAll = useCallback(async () => {
+    const pending = uploadItems.filter((item) => item.status === "pending");
+    if (pending.length === 0) return;
+
+    setIsUploading(true);
+
+    for (const item of pending) {
+      updateUploadItem(item.id, { status: "uploading", progress: 20 });
+
+      const formData = new FormData();
+      formData.append("video", item.file);
+      formData.append("title", item.title);
+      if (item.description) formData.append("description", item.description);
+      formData.append("category", videoCategoryToBackend(item.category));
+      if (item.sport) formData.append("sport", item.sport);
+      if (item.tags) formData.append("tags", item.tags);
+
+      try {
+        updateUploadItem(item.id, { progress: 50 });
+        await uploadVideo(formData);
+        updateUploadItem(item.id, { status: "done", progress: 100 });
+      } catch (err) {
+        updateUploadItem(item.id, {
+          status: "error",
+          progress: 0,
+          error: err instanceof Error ? err.message : "Upload failed",
+        });
+      }
+    }
+
+    setIsUploading(false);
+    refreshVideos();
+  }, [uploadItems, uploadVideo, updateUploadItem, refreshVideos]);
+
+  const handleFileInputChange = (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      addFiles(e.target.files);
+      e.target.value = "";
+    }
+  };
+
+  const clearCompleted = useCallback(() => {
+    setUploadItems((prev) => prev.filter((item) => item.status !== "done"));
+  }, []);
+
+  const pendingCount = uploadItems.filter((i) => i.status === "pending").length;
+  const doneCount = uploadItems.filter((i) => i.status === "done").length;
 
   const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -177,10 +286,10 @@ export default function VideosPage() {
   const handleDrop = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setIsDragOver(false);
-    // File handling would go here in a real application
+    if (e.dataTransfer.files.length > 0) {
+      addFiles(e.dataTransfer.files);
+    }
   };
-
-  // ---------- render helpers ----------
 
   const renderVideoCard = (video: Video) => {
     const isSelected = selectedVideos.includes(video.id);
@@ -193,7 +302,6 @@ export default function VideosPage() {
           isSelected && "ring-2 ring-emerald-500"
         )}
       >
-        {/* Thumbnail */}
         <div className="relative aspect-video bg-muted">
           <div className="absolute inset-0 flex items-center justify-center">
             <Film className="h-12 w-12 text-muted-foreground/40" />
@@ -203,11 +311,9 @@ export default function VideosPage() {
               <Play className="h-6 w-6 text-black" />
             </div>
           </div>
-          {/* Duration badge */}
           <div className="absolute bottom-2 right-2 rounded bg-black/75 px-1.5 py-0.5 text-xs font-medium text-white">
             {formatDuration(video.duration)}
           </div>
-          {/* Selection checkbox */}
           <div className="absolute left-2 top-2">
             <Checkbox
               checked={isSelected}
@@ -218,15 +324,10 @@ export default function VideosPage() {
         </div>
 
         <CardContent className="p-4">
-          {/* Title */}
           <h3 className="line-clamp-1 font-semibold">{video.title}</h3>
-
-          {/* Date & duration */}
           <p className="mt-1 text-xs text-muted-foreground">
             {formatDate(video.uploadDate)} &middot; {formatDuration(video.duration)}
           </p>
-
-          {/* Sport badge */}
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <Badge
               className={cn(
@@ -237,22 +338,18 @@ export default function VideosPage() {
               {video.sport}
             </Badge>
 
-            {/* Analysis status */}
             {getAnalysisBadge(video.analysisStatus)}
           </div>
 
-          {/* Teams */}
           <p className="mt-2 text-xs text-muted-foreground">
             {video.teams.join(" vs ")}
           </p>
 
-          {/* Views */}
           <div className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
             <Eye className="h-3.5 w-3.5" />
             <span>{video.views} views</span>
           </div>
 
-          {/* Tags */}
           {video.tags.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-1">
               {video.tags.slice(0, 3).map((tag) => (
@@ -268,7 +365,6 @@ export default function VideosPage() {
             </div>
           )}
 
-          {/* Actions */}
           <div className="mt-3 flex items-center gap-1">
             <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
               <Play className="h-3.5 w-3.5" />
@@ -299,13 +395,11 @@ export default function VideosPage() {
           isSelected && "ring-2 ring-emerald-500"
         )}
       >
-        {/* Checkbox */}
         <Checkbox
           checked={isSelected}
           onCheckedChange={() => toggleSelect(video.id)}
         />
 
-        {/* Thumbnail (small) */}
         <div className="relative h-16 w-28 shrink-0 overflow-hidden rounded bg-muted">
           <div className="flex h-full items-center justify-center">
             <Film className="h-6 w-6 text-muted-foreground/40" />
@@ -315,23 +409,19 @@ export default function VideosPage() {
           </div>
         </div>
 
-        {/* Title */}
         <div className="min-w-0 flex-1">
           <h3 className="truncate font-semibold text-sm">{video.title}</h3>
           <p className="text-xs text-muted-foreground">{video.teams.join(" vs ")}</p>
         </div>
 
-        {/* Date */}
         <span className="hidden shrink-0 text-xs text-muted-foreground md:block">
           {formatDate(video.uploadDate)}
         </span>
 
-        {/* Duration */}
         <span className="hidden shrink-0 text-xs text-muted-foreground lg:block">
           {formatDuration(video.duration)}
         </span>
 
-        {/* Sport */}
         <Badge
           className={cn(
             "hidden shrink-0 capitalize sm:inline-flex",
@@ -341,16 +431,13 @@ export default function VideosPage() {
           {video.sport}
         </Badge>
 
-        {/* Status */}
         <div className="hidden shrink-0 md:block">{getAnalysisBadge(video.analysisStatus)}</div>
 
-        {/* Views */}
         <div className="hidden shrink-0 items-center gap-1 text-xs text-muted-foreground lg:flex">
           <Eye className="h-3.5 w-3.5" />
           {video.views}
         </div>
 
-        {/* Actions */}
         <div className="flex shrink-0 items-center gap-1">
           <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
             <Play className="h-3.5 w-3.5" />
@@ -366,16 +453,10 @@ export default function VideosPage() {
     );
   };
 
-  // -----------------------------------------------------------------------
-  // JSX
-  // -----------------------------------------------------------------------
-
   return (
     <AppLayout>
       <div className="space-y-6 p-6">
-        {/* ============================================================== */}
-        {/* Page Header                                                     */}
-        {/* ============================================================== */}
+
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Video Library</h1>
@@ -392,13 +473,8 @@ export default function VideosPage() {
           </Button>
         </div>
 
-        {/* ============================================================== */}
-        {/* View Toggle & Filters Bar                                       */}
-        {/* ============================================================== */}
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          {/* Left side: view toggle + search */}
           <div className="flex items-center gap-3">
-            {/* View mode toggle */}
             <div className="flex items-center rounded-lg border border-border/50 bg-muted p-1">
               <button
                 onClick={() => setViewMode("grid")}
@@ -435,7 +511,6 @@ export default function VideosPage() {
               </button>
             </div>
 
-            {/* Search input */}
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -454,7 +529,6 @@ export default function VideosPage() {
               )}
             </div>
 
-            {/* Filter toggle */}
             <Button
               variant="outline"
               size="sm"
@@ -472,15 +546,11 @@ export default function VideosPage() {
             </Button>
           </div>
 
-          {/* Right side: results count */}
           <p className="text-sm text-muted-foreground">
             {filteredVideos.length} video{filteredVideos.length !== 1 && "s"} found
           </p>
         </div>
 
-        {/* ============================================================== */}
-        {/* Category Tabs                                                   */}
-        {/* ============================================================== */}
         <Tabs
           value={activeCategory}
           onValueChange={(val) => setActiveCategory(val as "all" | VideoCategory)}
@@ -494,13 +564,9 @@ export default function VideosPage() {
             <TabsTrigger value="highlights">Highlight Reels</TabsTrigger>
           </TabsList>
 
-          {/* ============================================================ */}
-          {/* Advanced Filters Panel (collapsible)                          */}
-          {/* ============================================================ */}
           {showFilters && (
             <Card className="mt-4">
               <CardContent className="flex flex-wrap items-end gap-4 p-4">
-                {/* Date from */}
                 <div className="space-y-1">
                   <label className="text-xs font-medium text-muted-foreground">From</label>
                   <Input
@@ -513,7 +579,6 @@ export default function VideosPage() {
                   />
                 </div>
 
-                {/* Date to */}
                 <div className="space-y-1">
                   <label className="text-xs font-medium text-muted-foreground">To</label>
                   <Input
@@ -526,7 +591,6 @@ export default function VideosPage() {
                   />
                 </div>
 
-                {/* Sport */}
                 <div className="space-y-1">
                   <label className="text-xs font-medium text-muted-foreground">Sport</label>
                   <Select
@@ -548,7 +612,6 @@ export default function VideosPage() {
                   </Select>
                 </div>
 
-                {/* Analysis Status */}
                 <div className="space-y-1">
                   <label className="text-xs font-medium text-muted-foreground">
                     Analysis Status
@@ -571,7 +634,6 @@ export default function VideosPage() {
                   </Select>
                 </div>
 
-                {/* Duration */}
                 <div className="space-y-1">
                   <label className="text-xs font-medium text-muted-foreground">Duration</label>
                   <Select
@@ -592,7 +654,6 @@ export default function VideosPage() {
                   </Select>
                 </div>
 
-                {/* Clear Filters */}
                 <Button
                   variant="ghost"
                   size="sm"
@@ -605,39 +666,250 @@ export default function VideosPage() {
             </Card>
           )}
 
-          {/* ============================================================ */}
-          {/* Drag & Drop Upload Zone                                       */}
-          {/* ============================================================ */}
           {showUpload && (
-            <div
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-              className={cn(
-                "mt-4 flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-10 transition-colors",
-                isDragOver
-                  ? "border-emerald-500 bg-emerald-500/5"
-                  : "border-border bg-muted/30"
-              )}
-            >
-              <Upload
-                className={cn(
-                  "mb-3 h-10 w-10",
-                  isDragOver ? "text-emerald-500" : "text-muted-foreground"
-                )}
+            <div className="mt-4 space-y-4">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept={ACCEPTED_EXTENSIONS}
+                multiple
+                className="hidden"
+                onChange={handleFileInputChange}
               />
-              <p className="text-sm font-medium">
-                Drag &amp; drop video files here or click to browse
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Supports MP4, MOV, AVI &mdash; Multiple files allowed
-              </p>
+
+              <div
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                onClick={() => fileInputRef.current?.click()}
+                className={cn(
+                  "flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed p-10 transition-colors",
+                  isDragOver
+                    ? "border-emerald-500 bg-emerald-500/5"
+                    : "border-border bg-muted/30 hover:border-muted-foreground/50"
+                )}
+              >
+                <Upload
+                  className={cn(
+                    "mb-3 h-10 w-10",
+                    isDragOver ? "text-emerald-500" : "text-muted-foreground"
+                  )}
+                />
+                <p className="text-sm font-medium">
+                  Drag &amp; drop video files here or click to browse
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Supports MP4, MOV, AVI, WebM, MKV &mdash; Up to 5 GB per file
+                </p>
+              </div>
+
+              {uploadItems.length > 0 && (
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="mb-3 flex items-center justify-between">
+                      <h3 className="text-sm font-semibold">
+                        Upload Queue ({uploadItems.length} file{uploadItems.length !== 1 && "s"})
+                      </h3>
+                      <div className="flex items-center gap-2">
+                        {doneCount > 0 && (
+                          <Button variant="ghost" size="sm" onClick={clearCompleted}>
+                            Clear completed
+                          </Button>
+                        )}
+                        <Button
+                          variant="sport"
+                          size="sm"
+                          onClick={handleUploadAll}
+                          disabled={isUploading || pendingCount === 0}
+                        >
+                          {isUploading ? (
+                            <>
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              Uploading...
+                            </>
+                          ) : (
+                            <>
+                              <Upload className="h-3.5 w-3.5" />
+                              Upload All ({pendingCount})
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      {uploadItems.map((item) => (
+                        <div
+                          key={item.id}
+                          className={cn(
+                            "flex items-center gap-3 rounded-lg border p-3",
+                            item.status === "done" && "border-emerald-500/30 bg-emerald-500/5",
+                            item.status === "error" && "border-destructive/30 bg-destructive/5"
+                          )}
+                        >
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
+                            <FileVideo className="h-5 w-5 text-muted-foreground" />
+                          </div>
+
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <p className="truncate text-sm font-medium">{item.title}</p>
+                              <Badge variant="secondary" className="shrink-0 text-[10px]">
+                                {formatFileSize(item.file.size)}
+                              </Badge>
+                            </div>
+
+                            {item.status === "uploading" && (
+                              <Progress value={item.progress} className="mt-1.5 h-1.5" />
+                            )}
+
+                            {item.status === "done" && (
+                              <p className="mt-0.5 flex items-center gap-1 text-xs text-emerald-500">
+                                <CheckCircle2 className="h-3 w-3" />
+                                Upload complete
+                              </p>
+                            )}
+
+                            {item.status === "error" && (
+                              <p className="mt-0.5 flex items-center gap-1 text-xs text-destructive">
+                                <AlertCircle className="h-3 w-3" />
+                                {item.error || "Upload failed"}
+                              </p>
+                            )}
+
+                            {item.status === "pending" && (
+                              <p className="mt-0.5 text-xs text-muted-foreground">
+                                {item.category} &middot; {item.sport}
+                                {item.tags && ` · ${item.tags}`}
+                              </p>
+                            )}
+                          </div>
+
+                          <div className="flex shrink-0 items-center gap-1">
+                            {item.status === "pending" && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 w-7 p-0"
+                                onClick={() => setEditingItem(item.id)}
+                              >
+                                <MoreVertical className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                            {(item.status === "pending" || item.status === "error") && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                                onClick={() => removeUploadItem(item.id)}
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              <Dialog
+                open={editingItem !== null}
+                onOpenChange={(open) => { if (!open) setEditingItem(null); }}
+              >
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Edit Video Details</DialogTitle>
+                    <DialogDescription>
+                      Set metadata before uploading.
+                    </DialogDescription>
+                  </DialogHeader>
+                  {editingItem && (() => {
+                    const item = uploadItems.find((i) => i.id === editingItem);
+                    if (!item) return null;
+                    return (
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="upload-title">Title</Label>
+                          <Input
+                            id="upload-title"
+                            value={item.title}
+                            onChange={(e) => updateUploadItem(item.id, { title: e.target.value })}
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="upload-description">Description</Label>
+                          <Textarea
+                            id="upload-description"
+                            value={item.description}
+                            onChange={(e) => updateUploadItem(item.id, { description: e.target.value })}
+                            rows={3}
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label>Category</Label>
+                            <Select
+                              value={item.category}
+                              onValueChange={(val) => updateUploadItem(item.id, { category: val as VideoCategory })}
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="match">Match Footage</SelectItem>
+                                <SelectItem value="training">Training Session</SelectItem>
+                                <SelectItem value="drills">Individual Drill</SelectItem>
+                                <SelectItem value="opponent">Opponent Analysis</SelectItem>
+                                <SelectItem value="highlights">Highlight Reel</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label>Sport</Label>
+                            <Select
+                              value={item.sport}
+                              onValueChange={(val) => updateUploadItem(item.id, { sport: val })}
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="soccer">Soccer</SelectItem>
+                                <SelectItem value="basketball">Basketball</SelectItem>
+                                <SelectItem value="baseball">Baseball</SelectItem>
+                                <SelectItem value="tennis">Tennis</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="upload-tags">Tags (comma-separated)</Label>
+                          <Input
+                            id="upload-tags"
+                            value={item.tags}
+                            onChange={(e) => updateUploadItem(item.id, { tags: e.target.value })}
+                            placeholder="e.g. highlights, first-half, set-pieces"
+                          />
+                        </div>
+                      </div>
+                    );
+                  })()}
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setEditingItem(null)}>
+                      Done
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             </div>
           )}
 
-          {/* ============================================================ */}
-          {/* Bulk Actions Bar                                              */}
-          {/* ============================================================ */}
           {selectedVideos.length > 0 && (
             <div className="mt-4 flex items-center gap-4 rounded-lg border border-emerald-500/30 bg-emerald-500/5 px-4 py-2">
               <Checkbox
@@ -668,12 +940,6 @@ export default function VideosPage() {
             </div>
           )}
 
-          {/* ============================================================ */}
-          {/* Video Content (Grid / List / Timeline)                        */}
-          {/* ============================================================ */}
-          {/* We use a single TabsContent wrapping all category values so the
-              view mode toggle is independent of the category tabs. The
-              filtering is already handled by the useMemo above. */}
           <TabsContent value={activeCategory} className="mt-4">
             {filteredVideos.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20 text-center">
@@ -684,17 +950,14 @@ export default function VideosPage() {
                 </p>
               </div>
             ) : viewMode === "grid" ? (
-              /* ---------- Grid View ---------- */
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
                 {filteredVideos.map(renderVideoCard)}
               </div>
             ) : viewMode === "list" ? (
-              /* ---------- List View ---------- */
               <div className="space-y-2">
                 {filteredVideos.map(renderListRow)}
               </div>
             ) : (
-              /* ---------- Timeline View ---------- */
               <div className="relative space-y-4 pl-8 before:absolute before:left-3 before:top-0 before:h-full before:w-px before:bg-border">
                 {filteredVideos
                   .sort(
@@ -704,20 +967,16 @@ export default function VideosPage() {
                   )
                   .map((video) => (
                     <div key={video.id} className="relative">
-                      {/* Timeline dot */}
                       <div className="absolute -left-8 top-4 flex h-6 w-6 items-center justify-center rounded-full border-2 border-emerald-500 bg-background">
                         <div className="h-2 w-2 rounded-full bg-emerald-500" />
                       </div>
 
-                      {/* Date label */}
                       <p className="mb-1 text-xs font-medium text-muted-foreground">
                         {formatDate(video.uploadDate)}
                       </p>
 
-                      {/* Card */}
                       <Card className="overflow-hidden">
                         <div className="flex gap-4 p-4">
-                          {/* Thumbnail small */}
                           <div className="relative h-20 w-36 shrink-0 overflow-hidden rounded bg-muted">
                             <div className="flex h-full items-center justify-center">
                               <Film className="h-6 w-6 text-muted-foreground/40" />
@@ -753,7 +1012,6 @@ export default function VideosPage() {
                             </div>
                           </div>
 
-                          {/* Actions */}
                           <div className="flex shrink-0 items-start gap-1">
                             <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
                               <Play className="h-3.5 w-3.5" />
@@ -773,10 +1031,6 @@ export default function VideosPage() {
             )}
           </TabsContent>
         </Tabs>
-
-        {/* ============================================================== */}
-        {/* Bottom Actions                                                  */}
-        {/* ============================================================== */}
         <div className="flex items-center justify-end gap-3 border-t border-border/50 pt-4">
           <Button variant="outline">
             <Film className="h-4 w-4" />

@@ -1,5 +1,5 @@
 import prisma from '../lib/prisma';
-import { getSignedUrl } from '../lib/s3';
+import { getSignedUrl } from '../lib/storage';
 import { visionClient, AnalysisPayload } from '../lib/vision-client';
 import { logger } from '../config/logger';
 import { env } from '../config/env';

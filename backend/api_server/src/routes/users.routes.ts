@@ -7,7 +7,7 @@ import { requireRole } from '../config/rbac.middleware';
 import { validate } from '../config/validate.middleware';
 import { uploadAvatar } from '../config/upload.middleware';
 import { AppError } from '../config/error.middleware';
-import { deleteFile } from '../lib/s3';
+import { s3DeleteFile } from '../lib/storage';
 
 const router = Router();
 
@@ -159,7 +159,7 @@ router.patch(
         try {
           const url = new URL(existingUser.avatarUrl);
           const oldKey = url.pathname.slice(1); // remove leading "/"
-          await deleteFile(oldKey);
+          await s3DeleteFile(oldKey);
         } catch {
           // Ignore errors when deleting old avatar
         }

@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__ide__getDiagnostics",
+      "Bash(cd:*)",
+      "Bash(head:*)",
+      "Bash(cd E:/Work/vision_tracking/backend/api_server && npx tsc --noEmit 2>&1)",
+      "Bash(node:*)",
+      "Bash(netstat -ano)"
+    ]
+  }
+}

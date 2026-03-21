@@ -3,7 +3,7 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { v4 as uuid } from 'uuid';
 import prisma from '../lib/prisma';
-import { getSignedUrl } from '../lib/s3';
+import { getSignedUrl } from '../lib/storage';
 import { authenticate } from '../config/auth.middleware';
 import { validate } from '../config/validate.middleware';
 import { AppError } from '../config/error.middleware';

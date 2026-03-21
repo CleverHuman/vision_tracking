@@ -2,7 +2,7 @@ import 'express-async-errors';
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import prisma from '../lib/prisma';
-import { getSignedUrl } from '../lib/s3';
+import { getSignedUrl } from '../lib/storage';
 import { visionClient, AnalysisPayload } from '../lib/vision-client';
 import { env } from '../config/env';
 import { authenticate } from '../config/auth.middleware';
